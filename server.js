@@ -27,6 +27,7 @@ app.use(morgan(":method :url :status :res[content-length] - :response-time ms"))
 const allowedOrigins = [
   "https://campgroundguides.com",
   "https://www.campgroundguides.com",
+  "https://affiliate.campgroundguides.com",
   "http://localhost:3000",
 ];
 
