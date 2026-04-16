@@ -156,38 +156,39 @@ app.post("/api/referrals", async (req, res) => {
       status: "submitted",
     });
 
-    await referral.save();
+ // Send thank-you email to referrer
+await sgMail.send({
+  to: referrer_email,
+  from: FROM_EMAIL,
+  subject: "Thank you for your referral!",
+  text: `Hi ${referrer_name},
 
-    // Send Thank You email to referrer
-    const thankYouMsg = {
-      to: referrer_email,
-      from: FROM_EMAIL,
-      templateId: SENDGRID_TEMPLATE_ID_THANKYOU,
-      dynamic_template_data: {
-        referrer_name,
-        business,
-      },
-    };
+Thank you for referring ${business} to Campground Guides! We appreciate your support.
 
-    await sgMail.send(thankYouMsg);
-
-    // Notify admin
-    const adminMsg = {
-      to: "info@campgroundguides.com",
-      from: FROM_EMAIL,
-      subject: "New Advertiser Referral Submitted",
-      text: `Referral submitted by ${referrer_name} ${referrer_last_name} for ${business}`,
-    };
-
-    await sgMail.send(adminMsg);
-
-    res.status(200).json({ success: true, message: "Referral submitted successfully." });
-  } catch (err) {
-    console.error("Referral error:", err);
-    res.status(500).json({ error: "Server error while submitting referral." });
-  }
+— Campground Guides Team`
 });
 
+// Send heads-up email to the referred business
+await sgMail.send({
+  to: dm_email,
+  from: FROM_EMAIL,
+  subject: "You were referred to Campground Guides",
+  text: `Hi ${dm_name},
+
+${referrer_name} thought Campground Guides might be a good fit for your business. No pressure — just a friendly heads-up.
+
+— Campground Guides Team`
+});
+
+// Notify admin (keep this exactly as-is)
+const adminMsg = {
+  to: "info@campgroundguides.com",
+  from: FROM_EMAIL,
+  subject: "New Advertiser Referral Submitted",
+  text: `Referral submitted by ${referrer_name} ${referrer_last_name} for ${business}`,
+};
+
+await sgMail.send(adminMsg);
 
 // ----------------------
 // Health Check
