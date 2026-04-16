@@ -181,16 +181,24 @@ Thank you for referring ${business} to Campground Guides! We appreciate your sup
     });
 
     // Heads-up email to the referred business
-    await sgMail.send({
-      to: dm_email,
-      from: FROM_EMAIL,
-      subject: "You were referred to Campground Guides",
-      text: `Hi ${dm_name},
+await sgMail.send({
+  to: dm_email,
+  from: FROM_EMAIL,
+  subject: "You were recommended to Campground Guides",
+  text: `Hi ${dm_name},
 
-${referrer_name} thought Campground Guides might be a good fit for your business. No pressure — just a friendly heads-up.
+You were recommended to us by someone who thinks highly of your business. At Campground Guides, we help RV travelers discover great local businesses through our digital guest service app.
 
-— Campground Guides Team`,
-    });
+We’d love to show you how your business could appear on our interactive map — complete with photos, videos, and your story.
+
+If you’d like a quick 15‑minute walkthrough, you can schedule here:
+[Calendar Link]
+
+Warm regards,
+Wade & Diana Wilson
+Campground Guides`,
+});
+
 
     // Admin notification (full details)
     const adminMsg = {
