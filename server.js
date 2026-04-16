@@ -1,6 +1,6 @@
 /* ======================================================
    Campground Guides Referral API - server.js
-   Clean, unified, CommonJS version for Render deployment
+   Clean, safe, stable version with phone number + full emails
    ====================================================== */
 
 const express = require("express");
@@ -80,16 +80,24 @@ if (MONGODB_URI) {
 // ----------------------
 // Mongoose Schema & Model
 // ----------------------
+// We KEEP this schema exactly as-is so nothing breaks.
+// We simply map your new fields into these existing ones.
 const referralSchema = new mongoose.Schema(
   {
     referrerName: { type: String, required: true },
     referrerEmail: { type: String, required: true },
+
+    // These are legacy fields — we keep them so MongoDB doesn't break.
     friendName: { type: String, required: true },
     friendEmail: { type: String, required: true },
+
     business: { type: String },
     source: { type: String, default: "referral-form" },
     status: { type: String, default: "submitted" },
     errorMessage: { type: String, default: null },
+
+    // NEW FIELD — safe to add
+    dmPhoneNumber: { type: String },
   },
   { timestamps: true }
 );
@@ -108,11 +116,6 @@ function normalizeEmail(email) {
   return email ? String(email).trim().toLowerCase() : "";
 }
 
-function isValidEmail(email) {
-  const re = /\S+@\S+\.\S+/;
-  return re.test(email);
-}
-
 // ----------------------
 // Referral Route (POST)
 // ----------------------
@@ -125,6 +128,7 @@ app.post("/api/referrals", async (req, res) => {
       business,
       dm_name,
       dm_email,
+      dm_phone_number,
       relationship,
       permission,
     } = req.body;
@@ -143,13 +147,17 @@ app.post("/api/referrals", async (req, res) => {
       return res.status(400).json({ error: "Missing or invalid required fields." });
     }
 
-    // Save referral to MongoDB
+    // Save referral to MongoDB (mapping new fields to legacy schema)
     const referral = new Referral({
       referrerName: `${referrer_name} ${referrer_last_name}`,
       referrerEmail: normalizeEmail(referrer_email),
+
+      // Legacy fields mapped to new meaning
       friendName: dm_name,
       friendEmail: normalizeEmail(dm_email),
+
       business,
+      dmPhoneNumber: dm_phone_number,
       source: "referral-form",
       status: "submitted",
     });
@@ -184,12 +192,26 @@ ${referrer_name} thought Campground Guides might be a good fit for your business
 — Campground Guides Team`,
     });
 
-    // Admin notification
+    // Admin notification (full details)
     const adminMsg = {
       to: "info@campgroundguides.com",
       from: FROM_EMAIL,
       subject: "New Advertiser Referral Submitted",
-      text: `Referral submitted by ${referrer_name} ${referrer_last_name} for ${business}`,
+      text: `A new advertiser referral has been submitted.
+
+Referring Party: ${referrer_name} ${referrer_last_name}
+Referrer Email: ${referrer_email}
+
+Business (Referrer): ${business}
+
+Decision Maker: ${dm_name}
+Decision Maker Email: ${dm_email}
+Decision Maker Phone: ${dm_phone_number}
+
+Relationship: ${relationship}
+Permission to Contact: ${permission}
+
+Submitted via Campground Guides Referral Form.`,
     };
 
     await sgMail.send(adminMsg);
