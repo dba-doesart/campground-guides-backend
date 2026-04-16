@@ -55,11 +55,9 @@ app.options("*", cors());
 const PORT = process.env.PORT || 5000;
 const MONGODB_URI = process.env.MONGODB_URI;
 const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY;
-const SENDGRID_TEMPLATE_ID_THANKYOU = process.env.SENDGRID_TEMPLATE_ID_THANKYOU;
 const FROM_EMAIL = process.env.FROM_EMAIL || "info@campgroundguides.com";
 
 if (!SENDGRID_API_KEY) console.error("❌ Missing SENDGRID_API_KEY");
-if (!SENDGRID_TEMPLATE_ID_THANKYOU) console.error("❌ Missing SENDGRID_TEMPLATE_ID_THANKYOU");
 if (!MONGODB_URI) console.error("❌ Missing MONGODB_URI");
 
 // ----------------------
@@ -156,39 +154,52 @@ app.post("/api/referrals", async (req, res) => {
       status: "submitted",
     });
 
- // Send thank-you email to referrer
-await sgMail.send({
-  to: referrer_email,
-  from: FROM_EMAIL,
-  subject: "Thank you for your referral!",
-  text: `Hi ${referrer_name},
+    await referral.save();
+
+    // ----------------------
+    // Send Emails
+    // ----------------------
+
+    // Thank-you email to referrer
+    await sgMail.send({
+      to: referrer_email,
+      from: FROM_EMAIL,
+      subject: "Thank you for your referral!",
+      text: `Hi ${referrer_name},
 
 Thank you for referring ${business} to Campground Guides! We appreciate your support.
 
-— Campground Guides Team`
-});
+— Campground Guides Team`,
+    });
 
-// Send heads-up email to the referred business
-await sgMail.send({
-  to: dm_email,
-  from: FROM_EMAIL,
-  subject: "You were referred to Campground Guides",
-  text: `Hi ${dm_name},
+    // Heads-up email to the referred business
+    await sgMail.send({
+      to: dm_email,
+      from: FROM_EMAIL,
+      subject: "You were referred to Campground Guides",
+      text: `Hi ${dm_name},
 
 ${referrer_name} thought Campground Guides might be a good fit for your business. No pressure — just a friendly heads-up.
 
-— Campground Guides Team`
+— Campground Guides Team`,
+    });
+
+    // Admin notification
+    const adminMsg = {
+      to: "info@campgroundguides.com",
+      from: FROM_EMAIL,
+      subject: "New Advertiser Referral Submitted",
+      text: `Referral submitted by ${referrer_name} ${referrer_last_name} for ${business}`,
+    };
+
+    await sgMail.send(adminMsg);
+
+    res.status(200).json({ success: true, message: "Referral submitted successfully." });
+  } catch (err) {
+    console.error("Referral error:", err);
+    res.status(500).json({ error: "Server error while submitting referral." });
+  }
 });
-
-// Notify admin (keep this exactly as-is)
-const adminMsg = {
-  to: "info@campgroundguides.com",
-  from: FROM_EMAIL,
-  subject: "New Advertiser Referral Submitted",
-  text: `Referral submitted by ${referrer_name} ${referrer_last_name} for ${business}`,
-};
-
-await sgMail.send(adminMsg);
 
 // ----------------------
 // Health Check
