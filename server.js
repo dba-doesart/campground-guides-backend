@@ -1,7 +1,8 @@
-// ======================================================
-// Campground Guides Referral API - server.js
-// Clean, unified version
-// ======================================================
+/* ======================================================
+   Campground Guides Referral API - server.js
+   Clean, safe, stable version with phone number + full emails
+   ====================================================== */
+
 
 import express from "express";
 import cors from "cors";
@@ -9,9 +10,10 @@ import dotenv from "dotenv";
 import mongoose from "mongoose";
 import sgMail from "@sendgrid/mail";
 import morgan from "morgan";
+import checkoutRoutes from "./routes/checkout.js";
 
-// Load environment variables
 dotenv.config();
+
 
 // ----------------------
 // Basic Config
@@ -19,8 +21,8 @@ dotenv.config();
 const app = express();
 app.set("trust proxy", 1);
 app.use(express.json());
-app.use(cors());
 app.use(morgan(":method :url :status :res[content-length] - :response-time ms"));
+app.use("/api", checkoutRoutes);
 
 // ----------------------
 // CORS Configuration
@@ -28,6 +30,8 @@ app.use(morgan(":method :url :status :res[content-length] - :response-time ms"))
 const allowedOrigins = [
   "https://campgroundguides.com",
   "https://www.campgroundguides.com",
+  "https://affiliate.campgroundguides.com",
+  "https://multi-park.campgroundguides.com",
   "http://localhost:3000",
 ];
 
@@ -50,86 +54,14 @@ app.use(
 app.options("*", cors());
 
 // ----------------------
-// Referral Route (extended with DB save)
-// ----------------------
-app.post("/submit-referral", async (req, res) => {
-  try {
-    const {
-      referrer_name,
-      referrer_last_name,
-      referrer_email,
-      referrer_business,
-      business,
-      dm_name,
-      dm_email,
-      dm_phone,
-      relationship,
-      permission,
-    } = req.body;
-
-    if (
-      !referrer_name ||
-      !referrer_last_name ||
-      !referrer_email ||
-      !business ||
-      !dm_name ||
-      !dm_email ||
-      !relationship ||
-      permission !== "yes"
-    ) {
-      return res.status(400).json({ error: "Missing or invalid required fields." });
-    }
-
-    // Save referral to MongoDB
-    const referral = new Referral({
-      referrerName: `${referrer_name} ${referrer_last_name}`,
-      referrerEmail: referrer_email,
-      friendName: dm_name,
-      friendEmail: dm_email,
-      source: "referral-form",
-      status: "submitted",
-    });
-    await referral.save();
-
-    // Send "Thank You for Referral" email
-    const msg = {
-      to: referrer_email,
-      from: FROM_EMAIL,
-      templateId: process.env.SENDGRID_TEMPLATE_ID_THANKYOU,
-      dynamic_template_data: {
-        referrer_name,
-        business,
-      },
-    };
-    await sgMail.send(msg);
-
-    // Notify admin
-    const adminMsg = {
-      to: "info@campgroundguides.com",
-      from: FROM_EMAIL,
-      subject: "New Advertiser Referral Submitted",
-      text: `Referral submitted by ${referrer_name} ${referrer_last_name} for ${business}`,
-    };
-    await sgMail.send(adminMsg);
-
-    res.status(200).json({ success: true, message: "Referral submitted successfully." });
-  } catch (err) {
-    console.error("Referral error:", err);
-    res.status(500).json({ error: "Server error while submitting referral." });
-  }
-});
-
-// ----------------------
 // Environment Validation
 // ----------------------
 const PORT = process.env.PORT || 5000;
 const MONGODB_URI = process.env.MONGODB_URI;
 const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY;
-const SENDGRID_TEMPLATE_ID = process.env.SENDGRID_TEMPLATE_ID;
 const FROM_EMAIL = process.env.FROM_EMAIL || "info@campgroundguides.com";
 
 if (!SENDGRID_API_KEY) console.error("❌ Missing SENDGRID_API_KEY");
-if (!SENDGRID_TEMPLATE_ID) console.error("❌ Missing SENDGRID_TEMPLATE_ID");
 if (!MONGODB_URI) console.error("❌ Missing MONGODB_URI");
 
 // ----------------------
@@ -160,15 +92,26 @@ if (MONGODB_URI) {
 // ----------------------
 // Mongoose Schema & Model
 // ----------------------
+
+// We KEEP this schema exactly as-is so nothing breaks.
+// We simply map your new fields into these existing ones.
+
 const referralSchema = new mongoose.Schema(
   {
     referrerName: { type: String, required: true },
     referrerEmail: { type: String, required: true },
+
+    // These are legacy fields — we keep them so MongoDB doesn't break.
     friendName: { type: String, required: true },
     friendEmail: { type: String, required: true },
+
+    business: { type: String },
     source: { type: String, default: "referral-form" },
-    status: { type: String, default: "email_sent" },
+    status: { type: String, default: "submitted" },
     errorMessage: { type: String, default: null },
+
+    // NEW FIELD — safe to add
+    dmPhoneNumber: { type: String },
   },
   { timestamps: true }
 );
@@ -187,14 +130,125 @@ function normalizeEmail(email) {
   return email ? String(email).trim().toLowerCase() : "";
 }
 
-function isValidEmail(email) {
-  const re = /\S+@\S+\.\S+/;
-  return re.test(email);
-}
+// ----------------------
+// Referral Route (POST)
+// ----------------------
+app.post("/api/referrals", async (req, res) => {
+  try {
+    const {
+      referrer_name,
+      referrer_last_name,
+      referrer_email,
+      business,
+      dm_name,
+      dm_email,
+      dm_phone_number,
+      relationship,
+      permission,
+    } = req.body;
 
-function logError(context, error) {
-  console.error(`❌ [${context}]`, { message: error.message, stack: error.stack });
-}
+    // Validate required fields
+    if (
+      !referrer_name ||
+      !referrer_last_name ||
+      !referrer_email ||
+      !business ||
+      !dm_name ||
+      !dm_email ||
+      !relationship ||
+      permission !== "yes"
+    ) {
+      return res
+        .status(400)
+        .json({ error: "Missing or invalid required fields." });
+    }
+
+    // Save referral to MongoDB (mapping new fields to legacy schema)
+    const referral = new Referral({
+      referrerName: `${referrer_name} ${referrer_last_name}`,
+      referrerEmail: normalizeEmail(referrer_email),
+
+      // Legacy fields mapped to new meaning
+      friendName: dm_name,
+      friendEmail: normalizeEmail(dm_email),
+
+      business,
+      dmPhoneNumber: dm_phone_number,
+      source: "referral-form",
+      status: "submitted",
+    });
+
+    await referral.save();
+
+    // ----------------------
+    // Send Emails
+    // ----------------------
+
+    // Thank-you email to referrer
+    await sgMail.send({
+      to: referrer_email,
+      from: FROM_EMAIL,
+      subject: "Thank you for your referral!",
+      text: `Hi ${referrer_name},
+
+Thank you for referring ${business} to Campground Guides! We appreciate your support.
+
+— Campground Guides Team`,
+    });
+
+    // Heads-up email to the referred business
+    await sgMail.send({
+      to: dm_email,
+      from: FROM_EMAIL,
+      subject: "You were recommended to Campground Guides",
+      text: `Hi ${dm_name},
+
+You were recommended to us by someone who thinks highly of your business. At Campground Guides, we help RV travelers discover great local businesses through our digital guest service app.
+
+We’d love to show you how your business could appear on our interactive map — complete with photos, videos, and your story.
+
+If you’d like a quick 15‑minute walkthrough, you can schedule here:
+[Calendar Link]
+
+Warm regards,
+Wade & Diana Wilson
+Campground Guides`,
+    });
+
+    // Admin notification (full details)
+    const adminMsg = {
+      to: "info@campgroundguides.com",
+      from: FROM_EMAIL,
+      subject: "New Advertiser Referral Submitted",
+      text: `A new advertiser referral has been submitted.
+
+Referring Party: ${referrer_name} ${referrer_last_name}
+Referrer Email: ${referrer_email}
+
+Business (Referrer): ${business}
+
+Decision Maker: ${dm_name}
+Decision Maker Email: ${dm_email}
+Decision Maker Phone: ${dm_phone_number}
+
+Relationship: ${relationship}
+Permission to Contact: ${permission}
+
+Submitted via Campground Guides Referral Form.`,
+    };
+
+    await sgMail.send(adminMsg);
+
+    res
+      .status(200)
+      .json({ success: true, message: "Referral submitted successfully." });
+  } catch (err) {
+    console.error("Referral error:", err);
+    res
+      .status(500)
+      .json({ error: "Server error while submitting referral." });
+  }
+});
 
 // ----------------------
 // Health Check
