@@ -240,7 +240,6 @@ Submitted via Campground Guides Referral Form.`,
 
     await sgMail.send(adminMsg);
 
- HEAD
     res
       .status(200)
       .json({ success: true, message: "Referral submitted successfully." });
