@@ -4,7 +4,7 @@ import Stripe from "stripe";
 const router = express.Router();
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
-// Tennessee Product IDs (for metadata only — NOT pricing)
+// Tennessee Product IDs (metadata only)
 const productIds = {
   "Cherokee Dam Campground": "prod_T1IHVoct838VPf",
   "Greenlee of May Springs": "prod_TFoxoMQJjPsPBM",
@@ -12,11 +12,11 @@ const productIds = {
   "Melton Hill Dam Campground": "prod_T1ILUnX3savDp8",
   "Yarberry Campground": "prod_T1IMdXTVqc4CFT",
   "Headwater Campground": "prod_V4Vs60hPRmGhT3",
-  "Tailwater Campground": "prod_V4Vs60hPRmGhT3",   // same product for both
+  "Tailwater Campground": "prod_V4Vs60hPRmGhT3",
   "Two Rivers Landing": "prod_V48vzUfNo17gK9"
 };
 
-// Multi‑park pricing table (already correct)
+// Multi‑park pricing table
 const PRICE_TABLE = {
   monthly: {
     1: "price_1U47y2Hw2ZCjSnG408sI7KX1",
@@ -40,17 +40,57 @@ const PRICE_TABLE = {
   }
 };
 
+// ⭐ Updated flexible checkout route
 router.post("/create-checkout", async (req, res) => {
   try {
-    const { selectedParks, billingCycle, email } = req.body;
+    // Accept multiple possible field names from the frontend
+    const selectedParks =
+      req.body.selectedParks ||
+      req.body.parks ||
+      req.body.selected ||
+      req.body.parkList ||
+      [];
 
-    // Count how many parks were selected
+    const billingCycle =
+      req.body.billingCycle ||
+      req.body.cycle ||
+      req.body.billing ||
+      req.body.subscriptionType ||
+      "monthly";
+
+    const email =
+      req.body.email ||
+      req.body.emailAddress ||
+      req.body.customerEmail ||
+      req.body.contact ||
+      null;
+
+    // Validate parks
+    if (!Array.isArray(selectedParks) || selectedParks.length === 0) {
+      return res.status(400).json({ error: "No parks selected" });
+    }
+
+    // Validate billing cycle
+    if (!["monthly", "annual"].includes(billingCycle)) {
+      return res.status(400).json({ error: "Invalid billing cycle" });
+    }
+
+    // Validate email
+    if (!email) {
+      return res.status(400).json({ error: "Email is required" });
+    }
+
+    // Count parks
     const parkCount = selectedParks.length;
 
-    // Select correct Stripe price ID based on count + billing cycle
+    // Get correct price ID
     const priceId = PRICE_TABLE[billingCycle][parkCount];
 
-    // Create Stripe Checkout Session
+    if (!priceId) {
+      return res.status(400).json({ error: "Invalid park count or billing cycle" });
+    }
+
+    // Create Stripe session
     const session = await stripe.checkout.sessions.create({
       mode: "subscription",
       line_items: [
@@ -60,15 +100,12 @@ router.post("/create-checkout", async (req, res) => {
         }
       ],
       customer_email: email,
-
-      // Metadata for your Stripe dashboard
       metadata: {
         parks_selected: selectedParks.join(", "),
         product_ids: selectedParks.map(p => productIds[p]).join(", "),
         park_count: parkCount,
         billing_cycle: billingCycle
       },
-
       success_url: process.env.SUCCESS_URL,
       cancel_url: process.env.CANCEL_URL
     });
@@ -82,4 +119,3 @@ router.post("/create-checkout", async (req, res) => {
 });
 
 export default router;
-
