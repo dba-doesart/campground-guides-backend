@@ -1,3 +1,4 @@
+ HEAD
 /* ======================================================
    Campground Guides Referral API - server.js
    Clean, safe, stable version with phone number + full emails
@@ -54,7 +55,9 @@ app.use(
 app.options("*", cors());
 
 // ----------------------
+ HEAD
 // Environment Validation
+
 // ----------------------
 const PORT = process.env.PORT || 5000;
 const MONGODB_URI = process.env.MONGODB_URI;
@@ -63,14 +66,6 @@ const FROM_EMAIL = process.env.FROM_EMAIL || "info@campgroundguides.com";
 
 if (!SENDGRID_API_KEY) console.error("❌ Missing SENDGRID_API_KEY");
 if (!MONGODB_URI) console.error("❌ Missing MONGODB_URI");
-
-// ----------------------
-// Error Handler
-// ----------------------
-app.use((err, req, res, next) => {
-  console.error("Unhandled error:", err.stack);
-  res.status(500).json({ error: "Internal server error." });
-});
 
 // ----------------------
 // SendGrid Setup
@@ -92,6 +87,7 @@ if (MONGODB_URI) {
 // ----------------------
 // Mongoose Schema & Model
 // ----------------------
+HEAD
 
 // We KEEP this schema exactly as-is so nothing breaks.
 // We simply map your new fields into these existing ones.
@@ -158,9 +154,11 @@ app.post("/api/referrals", async (req, res) => {
       !relationship ||
       permission !== "yes"
     ) {
+ HEAD
       return res
         .status(400)
         .json({ error: "Missing or invalid required fields." });
+
     }
 
     // Save referral to MongoDB (mapping new fields to legacy schema)
@@ -197,6 +195,7 @@ Thank you for referring ${business} to Campground Guides! We appreciate your sup
     });
 
     // Heads-up email to the referred business
+ HEAD
     await sgMail.send({
       to: dm_email,
       from: FROM_EMAIL,
@@ -213,7 +212,9 @@ If you’d like a quick 15‑minute walkthrough, you can schedule here:
 Warm regards,
 Wade & Diana Wilson
 Campground Guides`,
+ HEAD
     });
+
 
     // Admin notification (full details)
     const adminMsg = {
@@ -239,6 +240,7 @@ Submitted via Campground Guides Referral Form.`,
 
     await sgMail.send(adminMsg);
 
+ HEAD
     res
       .status(200)
       .json({ success: true, message: "Referral submitted successfully." });
@@ -247,6 +249,7 @@ Submitted via Campground Guides Referral Form.`,
     res
       .status(500)
       .json({ error: "Server error while submitting referral." });
+
   }
 });
 
