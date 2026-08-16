@@ -19,8 +19,10 @@ const app = express();
 app.set("trust proxy", 1);
 
 // ----------------------
-// CORS Configuration (MANUAL — FIXES OPTIONS HEADERS)
+// CORS Configuration (FIXED + CORRECT ORDER)
 // ----------------------
+import cors from "cors";
+
 const allowedOrigins = [
   "https://campgroundguides.com",
   "https://www.campgroundguides.com",
@@ -29,23 +31,24 @@ const allowedOrigins = [
   "http://localhost:3000",
 ];
 
-app.use((req, res, next) => {
-  const origin = req.headers.origin;
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        console.warn("❗ Blocked CORS origin:", origin);
+        callback(new Error("Not allowed by CORS"));
+      }
+    },
+    methods: ["GET", "POST", "OPTIONS"],
+    allowedHeaders: ["Content-Type"],
+    credentials: false,
+  })
+);
 
-  if (allowedOrigins.includes(origin)) {
-    res.header("Access-Control-Allow-Origin", origin);
-  }
-
-  res.header("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
-  res.header("Access-Control-Allow-Headers", "Content-Type");
-  res.header("Access-Control-Allow-Credentials", "true");
-
-  if (req.method === "OPTIONS") {
-    return res.sendStatus(200);
-  }
-
-  next();
-});
+// Preflight handler
+app.options("*", cors());
 
 // ----------------------
 // JSON + Logging
