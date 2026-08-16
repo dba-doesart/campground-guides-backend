@@ -1,4 +1,10 @@
+/* ======================================================
+   Campground Guides Checkout Routes - checkout.js
+   Clean, stable version with proper OPTIONS handling for CORS
+   ====================================================== */
+
 import express from "express";
+import sgMail from "@sendgrid/mail";
 import Stripe from "stripe";
 
 const router = express.Router();
