@@ -11,9 +11,12 @@ const router = express.Router();
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
 // ----------------------
-// OPTIONS Preflight Handler (CRITICAL FOR CORS)
+// FIXED OPTIONS Preflight Handler (CRITICAL FOR CORS)
 // ----------------------
 router.options("*", (req, res) => {
+  res.setHeader("Access-Control-Allow-Origin", req.headers.origin || "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
   res.sendStatus(200);
 });
 
@@ -24,8 +27,7 @@ const productIds = {
   "Greenlee - Original Campground": "prod_TFpKWzm03F6Nn4",
   "Melton Hill Dam Campground": "prod_T1ILUnX3savDp8",
   "Yarberry Campground": "prod_T1IMdXTVqc4CFT",
-  "Headwater Campground": "prod_V4Vs60hPRmGhT3",
-  "Tailwater Campground": "prod_V4Vs60hPRmGhT3",
+  "Headwater and Tailwater Campgrounds": "prod_V4Vs60hPRmGhT3",
   "Two Rivers Landing": "prod_V48vzUfNo17gK9"
 };
 
