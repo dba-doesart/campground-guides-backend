@@ -18,11 +18,9 @@ dotenv.config();
 // ----------------------
 const app = express();
 app.set("trust proxy", 1);
-app.use(express.json());
-app.use(morgan(":method :url :status :res[content-length] - :response-time ms"));
 
 // ----------------------
-// CORS Configuration
+// CORS Configuration (MUST COME BEFORE JSON + ROUTES)
 // ----------------------
 const allowedOrigins = [
   "https://campgroundguides.com",
@@ -35,8 +33,7 @@ const allowedOrigins = [
 app.use(
   cors({
     origin: function (origin, callback) {
-      if (!origin) return callback(null, true);
-      if (allowedOrigins.includes(origin)) {
+      if (!origin || allowedOrigins.includes(origin)) {
         return callback(null, true);
       }
       console.warn("❗ Blocked CORS origin:", origin);
@@ -48,10 +45,19 @@ app.use(
   })
 );
 
+// Preflight handler
 app.options("*", cors());
 
 // ----------------------
-// ROUTES (AFTER CORS)
+// JSON + Logging (AFTER CORS)
+// ----------------------
+app.use(express.json());
+app.use(
+  morgan(":method :url :status :res[content-length] - :response-time ms")
+);
+
+// ----------------------
+// ROUTES (AFTER CORS + JSON)
 // ----------------------
 app.use("/api", checkoutRoutes);
 
@@ -80,8 +86,17 @@ if (MONGODB_URI) {
   mongoose
     .connect(MONGODB_URI)
     .then(() => console.log("✅ Connected to MongoDB"))
-    .catch((err) => console.error("❌ MongoDB connection error:", err.message));
+    .catch((err) =>
+      console.error("❌ MongoDB connection error:", err.message)
+    );
 }
+
+// ----------------------
+// Start Server
+// ----------------------
+app.listen(PORT, () => {
+  console.log(`🚀 Server running on port ${PORT}`);
+});
 
 // ----------------------
 // Mongoose Schema & Model
