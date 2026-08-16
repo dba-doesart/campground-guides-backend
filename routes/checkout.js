@@ -4,6 +4,13 @@ import Stripe from "stripe";
 const router = express.Router();
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
+// ----------------------
+// OPTIONS Preflight Handler (CRITICAL FOR CORS)
+// ----------------------
+router.options("*", (req, res) => {
+  res.sendStatus(200);
+});
+
 // Tennessee Product IDs (metadata only)
 const productIds = {
   "Cherokee Dam Campground": "prod_T1IHVoct838VPf",
