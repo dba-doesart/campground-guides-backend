@@ -1,137 +1,62 @@
 /* ======================================================
-   Campground Guides Referral API - server.js
-   Clean, safe, stable version with phone number + full emails
+   Campground Guides Checkout Routes - checkout.js
+   Clean, stable version with proper OPTIONS handling for CORS
    ====================================================== */
 
 import express from "express";
-import cors from "cors";
-import dotenv from "dotenv";
-import mongoose from "mongoose";
 import sgMail from "@sendgrid/mail";
-import morgan from "morgan";
-import checkoutRoutes from "./routes/checkout.js";
+import Stripe from "stripe";
 
-dotenv.config();
-
-// ----------------------
-// Basic Config
-// ----------------------
-const app = express();
-app.set("trust proxy", 1);
+const router = express.Router();
 
 // ----------------------
-// CORS Configuration (MUST COME BEFORE JSON + ROUTES)
+// OPTIONS Preflight Handler (CRITICAL FOR CORS)
 // ----------------------
-const allowedOrigins = [
-  "https://campgroundguides.com",
-  "https://www.campgroundguides.com",
-  "https://affiliate.campgroundguides.com",
-  "https://multi-park.campgroundguides.com",
-  "http://localhost:3000",
-];
-
-app.use(
-  cors({
-    origin: function (origin, callback) {
-      if (!origin || allowedOrigins.includes(origin)) {
-        return callback(null, true);
-      }
-      console.warn("❗ Blocked CORS origin:", origin);
-      return callback(new Error("Not allowed by CORS"));
-    },
-    methods: ["GET", "POST", "OPTIONS"],
-    allowedHeaders: ["Content-Type"],
-    credentials: false,
-  })
-);
-
-// Preflight handler
-app.options("*", cors());
-
-// ----------------------
-// JSON + Logging (AFTER CORS)
-// ----------------------
-app.use(express.json());
-app.use(
-  morgan(":method :url :status :res[content-length] - :response-time ms")
-);
-
-// ----------------------
-// ROUTES (AFTER CORS + JSON)
-// ----------------------
-app.use("/api", checkoutRoutes);
-
-// ----------------------
-// Environment Validation
-// ----------------------
-const PORT = process.env.PORT || 5000;
-const MONGODB_URI = process.env.MONGODB_URI;
-const SENDGRID_API_KEY = process.env.SENDGRID_API_KEY;
-const FROM_EMAIL = process.env.FROM_EMAIL || "info@campgroundguides.com";
-
-if (!SENDGRID_API_KEY) console.error("❌ Missing SENDGRID_API_KEY");
-if (!MONGODB_URI) console.error("❌ Missing MONGODB_URI");
-
-// ----------------------
-// SendGrid Setup
-// ----------------------
-if (SENDGRID_API_KEY) {
-  sgMail.setApiKey(SENDGRID_API_KEY);
-}
-
-// ----------------------
-// MongoDB / Mongoose Setup
-// ----------------------
-if (MONGODB_URI) {
-  mongoose
-    .connect(MONGODB_URI)
-    .then(() => console.log("✅ Connected to MongoDB"))
-    .catch((err) =>
-      console.error("❌ MongoDB connection error:", err.message)
-    );
-}
-
-// ----------------------
-// Start Server
-// ----------------------
-app.listen(PORT, () => {
-  console.log(`🚀 Server running on port ${PORT}`);
+router.options("*", (req, res) => {
+  res.sendStatus(200);
 });
 
 // ----------------------
-// Mongoose Schema & Model
+// Stripe Setup
 // ----------------------
-// (Your schema/model code goes here)
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY);
 
-// We KEEP this schema exactly as-is so nothing breaks.
-// We simply map your new fields into these existing ones.
+// ----------------------
+// Create Checkout Session
+// ----------------------
+router.post("/create-checkout", async (req, res) => {
+  try {
+    const payload = req.body;
 
-const referralSchema = new mongoose.Schema(
-  {
-    referrerName: { type: String, required: true },
-    referrerEmail: { type: String, required: true },
+    if (!payload || !payload.priceId || !payload.metadata) {
+      return res.status(400).json({ error: "Invalid payload" });
+    }
 
-    // These are legacy fields — we keep them so MongoDB doesn't break.
-    friendName: { type: String, required: true },
-    friendEmail: { type: String, required: true },
+    const session = await stripe.checkout.sessions.create({
+      mode: "payment",
+      payment_method_types: ["card"],
+      line_items: [
+        {
+          price: payload.priceId,
+          quantity: 1,
+        },
+      ],
+      metadata: payload.metadata,
+      success_url: payload.successUrl,
+      cancel_url: payload.cancelUrl,
+    });
 
-    business: { type: String },
-    source: { type: String, default: "referral-form" },
-    status: { type: String, default: "submitted" },
-    errorMessage: { type: String, default: null },
+    res.status(200).json({ url: session.url });
+  } catch (err) {
+    console.error("❌ Stripe Checkout Error:", err);
+    res.status(500).json({ error: "Failed to create checkout session" });
+  }
+});
 
-    // NEW FIELD — safe to add
-    dmPhoneNumber: { type: String },
-  },
-  { timestamps: true }
-);
-
-let Referral;
-try {
-  Referral = mongoose.model("Referral");
-} catch {
-  Referral = mongoose.model("Referral", referralSchema);
-}
+// ----------------------
+// Export Router
+// ----------------------
+export default router;
 
 // ----------------------
 // Utility Helpers
