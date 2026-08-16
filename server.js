@@ -1,9 +1,7 @@
- HEAD
 /* ======================================================
    Campground Guides Referral API - server.js
    Clean, safe, stable version with phone number + full emails
    ====================================================== */
-
 
 import express from "express";
 import cors from "cors";
@@ -15,7 +13,6 @@ import checkoutRoutes from "./routes/checkout.js";
 
 dotenv.config();
 
-
 // ----------------------
 // Basic Config
 // ----------------------
@@ -23,7 +20,6 @@ const app = express();
 app.set("trust proxy", 1);
 app.use(express.json());
 app.use(morgan(":method :url :status :res[content-length] - :response-time ms"));
-app.use("/api", checkoutRoutes);
 
 // ----------------------
 // CORS Configuration
@@ -55,9 +51,12 @@ app.use(
 app.options("*", cors());
 
 // ----------------------
- HEAD
-// Environment Validation
+// ROUTES (AFTER CORS)
+// ----------------------
+app.use("/api", checkoutRoutes);
 
+// ----------------------
+// Environment Validation
 // ----------------------
 const PORT = process.env.PORT || 5000;
 const MONGODB_URI = process.env.MONGODB_URI;
@@ -87,7 +86,7 @@ if (MONGODB_URI) {
 // ----------------------
 // Mongoose Schema & Model
 // ----------------------
-HEAD
+// (Your schema/model code goes here)
 
 // We KEEP this schema exactly as-is so nothing breaks.
 // We simply map your new fields into these existing ones.
@@ -240,6 +239,7 @@ Submitted via Campground Guides Referral Form.`,
 
     await sgMail.send(adminMsg);
 
+ HEAD
     res
       .status(200)
       .json({ success: true, message: "Referral submitted successfully." });
